@@ -1,0 +1,82 @@
+<!-- Main page of website -->
+<!-- boiler plate code -->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Open+Sans:wght@400;500;600&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="style-modern.css" />
+    <link href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css" rel="stylesheet">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/quill-cursors@5.0.0/dist/quill-cursors.js" defer></script>
+    <script src="script.js" defer></script>
+    <title>Index</title>
+</head>
+
+<!-- body of page -->
+
+<body>
+    <!-- container -->
+    <div class="container">
+        <!-- header, has logo title, nav links -->
+        <header>
+            <div class="left_header">
+                <a href="index.html" id="logoLink">
+                    <img id="site_logo" src="images/Psoda-Logo-White.svg" alt="Psoda logo">
+                </a>
+                <h1>Collaborative Document Editor</h1>
+            </div>
+            <div class="right_header">
+                <nav class="navbar">
+                    <a href="index.html" class="active">Editor</a>
+                </nav>
+                <button id="themeToggle" title="Toggle dark mode">🌙</button>
+            </div>
+        </header>
+        <!-- main body -->
+        <main>
+            <!-- home / document picker -->
+            <section id="homeSection">
+                <div class="home-header">
+                    <h2>Documents</h2>
+                    <button id="newDocBtnHome">New Document</button>
+                </div>
+                <div id="documentList" class="document-list" aria-label="Available documents"></div>
+            </section>
+
+            <!-- login section with name input and button -->
+            <section id="loginSection" class="hidden">
+                <h2>Enter your name</h2>
+                <input id="nameInput" type="text" placeholder="Your name">
+                <button id="joinBtn">Start editing</button>
+            </section>
+
+            <!-- document editor page -->
+            <section id="editorSection" class="hidden">
+                <div id="docControls">
+                    <h2 id="documentTitle" contenteditable="true" spellcheck="false">Shared Document</h2>
+                    <div id="docActions">
+                        <button id="save_btn" title="Save document">
+                            <img id="save_icon" src="images/save_icon.png" alt="save btn">
+                        </button>
+                    </div>
+                </div>
+                <div id="activeUsers"></div>
+                <div id="documentEditor"></div>
+            </section>
+        </main>
+
+        <!-- footer -->
+        <footer>
+
+        </footer>
+    </div>
+</body>
+
+</html>
