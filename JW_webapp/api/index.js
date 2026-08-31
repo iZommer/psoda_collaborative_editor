@@ -3,6 +3,7 @@ import path from 'node:path'
 import {
     handleCreateDocument,
     handleCreateUser,
+    handleDatabaseHealth,
     handleGetDocument,
     handleGetDocuments,
     handleSync,
@@ -27,6 +28,7 @@ app.get(['/api', '/api/'], (req, res) => {
 const routePaths = (path) => [path, `/api${path}`]
 
 app.post(routePaths('/app/users'), handleCreateUser)
+app.get(routePaths('/app/health/db'), handleDatabaseHealth)
 app.get(routePaths('/app/document'), handleGetDocument)
 app.put(routePaths('/app/document'), handleUpdateDocument)
 app.post(routePaths('/app/document'), handleCreateDocument)

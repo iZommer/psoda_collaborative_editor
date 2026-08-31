@@ -21,7 +21,7 @@ if (!process.env.DATABASE_URL) {
 
 const { Pool } = pg
 
-const DB_SCHEMA = process.env.DB_SCHEMA || 'psoda'
+const DB_SCHEMA = process.env.DB_SCHEMA || 'public'
 
 if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(DB_SCHEMA)) {
     throw new Error('DB_SCHEMA must be a valid PostgreSQL identifier')
@@ -37,10 +37,9 @@ const tables = {
 // Connect to db
 // DATABASE_URL should be your Neon connection string, e.g.
 // postgresql://user:password@ep-xxxx-pooler.region.aws.neon.tech/psoda?sslmode=require
-// The Neon import in psoda_final.sql creates tables in the "psoda" schema.
+// Override DB_SCHEMA in Vercel if your tables live outside the default "public" schema.
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    options: `-c search_path=${DB_SCHEMA},public`,
     enableChannelBinding: true,
     ssl: { rejectUnauthorized: false }
 })
@@ -67,6 +66,31 @@ async function getDocuments() {
     `)
 
     return rows
+}
+
+async function getDatabaseHealth() {
+    const { rows: connectionRows } = await pool.query(`
+        SELECT current_database() AS database_name, current_user AS user_name
+    `)
+
+    const { rows: tableRows } = await pool.query(`
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = $1
+          AND table_name = ANY($2::text[])
+        ORDER BY table_name
+    `, [DB_SCHEMA, ['cursors', 'document_changes', 'documents', 'users']])
+
+    const { rows: userRows } = await pool.query(`SELECT COUNT(*)::int AS count FROM ${tables.users}`)
+
+    return {
+        ok: true,
+        database: connectionRows[0].database_name,
+        user: connectionRows[0].user_name,
+        schema: DB_SCHEMA,
+        tables: tableRows.map(row => row.table_name),
+        userCount: userRows[0].count
+    }
 }
 
 // creates a new document in the db
@@ -253,6 +277,7 @@ export {
     DEFAULT_DOCUMENT_ID,
     createDocument,
     createUser,
+    getDatabaseHealth,
     getDocument,
     getDocuments,
     getSyncState,

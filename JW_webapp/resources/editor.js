@@ -2,6 +2,7 @@ import {
     DEFAULT_DOCUMENT_ID,
     createDocument,
     createUser,
+    getDatabaseHealth,
     getDocument,
     getDocuments,
     getSyncState,
@@ -59,6 +60,15 @@ async function handleGetDocuments(req, res) {
         res.json(documents)
     } catch (error) {
         serverError(res, 'Failed to get documents', error)
+    }
+}
+
+async function handleDatabaseHealth(req, res) {
+    try {
+        const health = await getDatabaseHealth()
+        res.json(health)
+    } catch (error) {
+        serverError(res, 'Failed to connect to database', error)
     }
 }
 
@@ -208,6 +218,7 @@ async function handleDeleteDocument(req, res) {
 export {
     handleCreateDocument,
     handleCreateUser,
+    handleDatabaseHealth,
     handleGetDocument,
     handleGetDocuments,
     handleSync,
