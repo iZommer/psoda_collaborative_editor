@@ -21,6 +21,10 @@ if (!process.env.DATABASE_URL) {
 
 const { Pool } = pg
 
+// The imported Neon schema uses bigint ids/versions. node-postgres returns bigint
+// values as strings by default, which breaks strict version comparisons.
+pg.types.setTypeParser(20, value => Number(value))
+
 const DB_SCHEMA = process.env.DB_SCHEMA || 'public'
 
 if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(DB_SCHEMA)) {
@@ -128,7 +132,7 @@ async function updateDocument(documentId, userId, content, baseVersion, title = 
             return { status: 'not_found' }
         }
 
-        if (document.version !== baseVersion) {
+        if (document.version !== Number(baseVersion)) {
             const { rows: latestDocuments } = await client.query(`
                 SELECT id, title, content, version, updated_at
                 FROM ${tables.documents}

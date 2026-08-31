@@ -49,6 +49,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     let syncTimer = null     // interval timer: polls the server for updates while editing
     let isSaving = false     // guards against overlapping save requests
     let saveQueued = false   // set when a save is requested while one is already in flight
+    let hasUnsavedChanges = false // prevents polling from overwriting local edits waiting to save
     let isLoadingRemoteChange = false // true while applying a remote update, to avoid re-triggering save/cursor logic
     let cursorModule         // reference to the Quill "cursors" module, used to render other users' cursors
     const remoteCursorIds = new Set() // tracks which remote users currently have a visible cursor in the editor
@@ -124,7 +125,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
                 if (!res.ok) throw new Error(`HTTP ${res.status}`)
                 const doc = await res.json()
-                currentDocumentId = doc.id
+                currentDocumentId = Number(doc.id)
                 await loadDocumentList()
 
                 if (currentUserId) {
@@ -157,7 +158,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             if (!response.ok) throw new Error(`HTTP ${response.status}`)
 
             const documentData = await response.json()
-            currentDocumentId = documentData.id
+            currentDocumentId = Number(documentData.id)
             setDocumentContent(documentData)
         } catch (error) {
             console.error('Error loading document:', error)
@@ -222,7 +223,7 @@ document.addEventListener("DOMContentLoaded", async function () {
                     if (!res.ok && res.status !== 204) throw new Error(`HTTP ${res.status}`)
 
                     // if currently viewing this document, clear and show home
-                    if (currentDocumentId === d.id) {
+                    if (currentDocumentId === Number(d.id)) {
                         currentDocumentId = null
                         if (quill) quill.setText('\n', 'silent')
                         editorSection.classList.add('hidden')
@@ -243,7 +244,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             async function openDocument() {
                 
                 if (!currentUserId) {
-                    currentDocumentId = d.id
+                    currentDocumentId = Number(d.id)
                     homeSection.classList.add('hidden')
                     loginSection.classList.remove('hidden')
                     nameInput.focus()
@@ -270,7 +271,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     // Carefully preserves the user's current cursor selection (clamped to the new
     // content length) so their cursor doesn't jump around when remote edits come in.
     function setDocumentContent(documentData) {
-        currentVersion = documentData.version
+        currentVersion = Number(documentData.version)
 
         // update title
         if (documentTitleEl) {
@@ -341,7 +342,10 @@ document.addEventListener("DOMContentLoaded", async function () {
 
             if (res.status === 200) {
                 // server returns fresh document
-                currentVersion = data.version
+                currentVersion = Number(data.version)
+                if (content === JSON.stringify(quill.getContents())) {
+                    hasUnsavedChanges = false
+                }
                 if (data.title && documentTitleEl) documentTitleEl.textContent = data.title
                 console.log('Saved, new version:', currentVersion)
             } else if (res.status === 409) {
@@ -397,7 +401,8 @@ document.addEventListener("DOMContentLoaded", async function () {
 
             const data = await res.json()
             // server returns full updated document
-            currentVersion = data.version
+            currentVersion = Number(data.version)
+            hasUnsavedChanges = false
             documentTitleEl.textContent = data.title || newTitle
             await loadDocumentList()
         } catch (err) {
@@ -531,7 +536,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             showActiveUsers(data.cursors)
             showRemoteCursors(data.cursors)
 
-            if (data.document && data.document.version !== currentVersion && !isSaving && !saveQueued) {
+            if (data.document && Number(data.document.version) !== currentVersion && !isSaving && !saveQueued && !hasUnsavedChanges) {
                 setDocumentContent(data.document)
             }
         } catch (error) {
@@ -571,6 +576,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             quill.on('text-change', function () {
                 if (isLoadingRemoteChange) return
 
+                hasUnsavedChanges = true
                 saveCursor(quill.getSelection())
                 clearTimeout(saveTimer)
                 saveTimer = setTimeout(saveDocument, 500)
