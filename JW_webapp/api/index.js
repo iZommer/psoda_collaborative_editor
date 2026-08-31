@@ -1,5 +1,6 @@
 import express from 'express'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import {
     handleCreateDocument,
     handleCreateUser,
@@ -13,16 +14,18 @@ import {
 } from '../resources/editor.js'
 
 const app = express()
+const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const publicDir = path.join(appRoot, 'public')
 
 app.use(express.json())
-app.use(express.static(path.join(process.cwd(), 'public')))
+app.use(express.static(publicDir))
 
 app.get('/', (req, res) => {
-    res.sendFile(path.join(process.cwd(), 'public', 'index.html'))
+    res.sendFile(path.join(publicDir, 'index.html'))
 })
 
 app.get(['/api', '/api/'], (req, res) => {
-    res.sendFile(path.join(process.cwd(), 'public', 'index.html'))
+    res.sendFile(path.join(publicDir, 'index.html'))
 })
 
 const routePaths = (path) => [path, `/api${path}`]
