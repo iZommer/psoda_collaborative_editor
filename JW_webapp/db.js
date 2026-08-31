@@ -1,10 +1,23 @@
 // This file is the connection to the db
 // it defines and exports all database functions
 
+import path from 'node:path'
 import pg from 'pg'
 import dotenv from 'dotenv'
 
-dotenv.config()
+const envCandidates = [
+    path.resolve(process.cwd(), '.env'),
+    path.resolve(process.cwd(), 'resources', '.env')
+]
+
+for (const envPath of envCandidates) {
+    dotenv.config({ path: envPath })
+    if (process.env.DATABASE_URL) break
+}
+
+if (!process.env.DATABASE_URL) {
+    console.warn('DATABASE_URL is not set. Add it to Vercel env vars or place a .env file in the project root or resources/.env')
+}
 
 const { Pool } = pg
 
