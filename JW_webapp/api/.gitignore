@@ -1,0 +1,9 @@
+# Hide your secret environment variables
+.env
+
+# Hide an entire folder (like node_modules or venv)
+node_modules/
+venv/
+
+# Hide all files of a specific type (like log files)
+*.log
