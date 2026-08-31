@@ -24,13 +24,15 @@ app.get(['/api', '/api/'], (req, res) => {
     res.sendFile(path.join(process.cwd(), 'public', 'index.html'))
 })
 
-app.post('/api/app/users', handleCreateUser)
-app.get('/api/app/document', handleGetDocument)
-app.put('/api/app/document', handleUpdateDocument)
-app.post('/api/app/document', handleCreateDocument)
-app.get('/api/app/documents', handleGetDocuments)
-app.delete('/api/app/document', handleDeleteDocument)
-app.post('/api/app/cursor', handleUpdateCursor)
-app.get('/api/app/sync', handleSync)
+const routePaths = (path) => [path, `/api${path}`]
+
+app.post(routePaths('/app/users'), handleCreateUser)
+app.get(routePaths('/app/document'), handleGetDocument)
+app.put(routePaths('/app/document'), handleUpdateDocument)
+app.post(routePaths('/app/document'), handleCreateDocument)
+app.get(routePaths('/app/documents'), handleGetDocuments)
+app.delete(routePaths('/app/document'), handleDeleteDocument)
+app.post(routePaths('/app/cursor'), handleUpdateCursor)
+app.get(routePaths('/app/sync'), handleSync)
 
 export default app

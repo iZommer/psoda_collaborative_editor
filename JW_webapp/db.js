@@ -24,8 +24,11 @@ const { Pool } = pg
 // Connect to db
 // DATABASE_URL should be your Neon connection string, e.g.
 // postgresql://user:password@ep-xxxx-pooler.region.aws.neon.tech/psoda?sslmode=require
+// The Neon import in psoda_final.sql creates tables in the "psoda" schema, while
+// the app uses unqualified table names such as "users" and "documents".
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
+    options: '-c search_path=psoda,public',
     ssl: { rejectUnauthorized: false }
 })
 

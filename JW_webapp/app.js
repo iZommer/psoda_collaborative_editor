@@ -18,14 +18,16 @@ const port = process.env.PORT || 3000
 app.use(express.json())
 app.use(express.static('public'))
 
-app.post('/app/users', handleCreateUser)
-app.get('/app/document', handleGetDocument)
-app.put('/app/document', handleUpdateDocument)
-app.post('/app/document', handleCreateDocument)
-app.get('/app/documents', handleGetDocuments)
-app.delete('/app/document', handleDeleteDocument)
-app.post('/app/cursor', handleUpdateCursor)
-app.get('/app/sync', handleSync)
+const routePaths = (path) => [path, `/api${path}`]
+
+app.post(routePaths('/app/users'), handleCreateUser)
+app.get(routePaths('/app/document'), handleGetDocument)
+app.put(routePaths('/app/document'), handleUpdateDocument)
+app.post(routePaths('/app/document'), handleCreateDocument)
+app.get(routePaths('/app/documents'), handleGetDocuments)
+app.delete(routePaths('/app/document'), handleDeleteDocument)
+app.post(routePaths('/app/cursor'), handleUpdateCursor)
+app.get(routePaths('/app/sync'), handleSync)
 
 if (!process.env.VERCEL) {
     app.listen(port, () => {
