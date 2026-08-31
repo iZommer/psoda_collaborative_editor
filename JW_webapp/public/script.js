@@ -36,6 +36,8 @@ document.addEventListener("DOMContentLoaded", async function () {
     const newDocBtnHome = document.getElementById('newDocBtnHome')
     const homeSection = document.getElementById('homeSection')
     const documentListEl = document.getElementById('documentList')
+    const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? '' : '/api'
+    const apiUrl = (path) => `${API_BASE}${path}`
 
     // Quill editor instance and state used to track the current document/user/session.
     let quill
@@ -114,7 +116,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
             try {
                 // Create the new document record on the server.
-                const res = await fetch('/app/document', {
+                const res = await fetch(apiUrl('/app/document'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ title: String(title) })
@@ -149,7 +151,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     async function loadDocument(documentId = null) {
         try {
             if (!documentId) documentId = currentDocumentId
-            const url = documentId ? `/app/document?documentId=${encodeURIComponent(documentId)}` : '/app/document'
+            const url = documentId ? `${apiUrl('/app/document')}?documentId=${encodeURIComponent(documentId)}` : apiUrl('/app/document')
             const response = await fetch(url)
 
             if (!response.ok) throw new Error(`HTTP ${response.status}`)
@@ -167,7 +169,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     // Fetches the list of all documents (for the home screen) and renders them as cards.
     async function loadDocumentList() {
         try {
-            const res = await fetch('/app/documents')
+            const res = await fetch(apiUrl('/app/documents'))
             if (!res.ok) throw new Error(`HTTP ${res.status}`)
             const docs = await res.json()
             renderDocumentList(docs)
@@ -211,7 +213,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
                 try {
                     // Ask the server to delete this document.
-                    const res = await fetch(`/app/document?documentId=${encodeURIComponent(d.id)}`, { method: 'DELETE' })
+                    const res = await fetch(`${apiUrl('/app/document')}?documentId=${encodeURIComponent(d.id)}`, { method: 'DELETE' })
                     if (res.status === 404) {
                         alert('Document not found')
                         await loadDocumentList()
@@ -324,7 +326,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         const content = JSON.stringify(quill.getContents())
 
         try {
-            const res = await fetch(`/app/document`, {
+            const res = await fetch(apiUrl('/app/document'), {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -371,7 +373,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         const content = JSON.stringify(quill.getContents())
 
         try {
-            const res = await fetch(`/app/document`, {
+            const res = await fetch(apiUrl('/app/document'), {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -425,7 +427,7 @@ document.addEventListener("DOMContentLoaded", async function () {
                 cursorEnd: cursorEnd
             }
 
-            const response = await fetch('/app/cursor', {
+            const response = await fetch(apiUrl('/app/cursor'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body)
@@ -520,7 +522,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     // aren't in the middle of saving — refreshes the editor content.
     async function syncState() {
         try {
-            const url = currentDocumentId ? `/app/sync?documentId=${encodeURIComponent(currentDocumentId)}` : '/app/sync'
+            const url = currentDocumentId ? `${apiUrl('/app/sync')}?documentId=${encodeURIComponent(currentDocumentId)}` : apiUrl('/app/sync')
             const response = await fetch(url)
 
             if (!response.ok) throw new Error(`HTTP ${response.status}`)
@@ -605,7 +607,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         }
 
         try {
-            const response = await fetch('/app/users', {
+            const response = await fetch(apiUrl('/app/users'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name: name })

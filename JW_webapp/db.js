@@ -1,35 +1,37 @@
-// This file is the connection to the db 
-// it defines and exports all database functions 
+// This file is the connection to the db
+// it defines and exports all database functions
 
-import mysql from 'mysql2'
+import pg from 'pg'
 import dotenv from 'dotenv'
 
 dotenv.config()
 
+const { Pool } = pg
+
 // Connect to db
-const pool = mysql.createPool({
-    host: process.env.MYSQL_HOST,
-    user: process.env.MYSQL_USER,
-    password: process.env.MYSQL_PASSWORD,
-    database: process.env.MYSQL_DATABASE
-}).promise()
+// DATABASE_URL should be your Neon connection string, e.g.
+// postgresql://user:password@ep-xxxx-pooler.region.aws.neon.tech/psoda?sslmode=require
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false }
+})
 
 //if document table is empty, default first doc
 const DEFAULT_DOCUMENT_ID = 1
 
-// retrieves document by id 
+// retrieves document by id
 async function getDocument(documentId = DEFAULT_DOCUMENT_ID) {
-    const [rows] = await pool.query(`
+    const { rows } = await pool.query(`
         SELECT id, title, content, version, updated_at
         FROM documents
-        WHERE id = ?`, [documentId])
+        WHERE id = $1`, [documentId])
 
     return rows[0]
 }
 
 // retrieves all documents for the document picker page
 async function getDocuments() {
-    const [rows] = await pool.query(`
+    const { rows } = await pool.query(`
         SELECT id, title, version, created_at, updated_at
         FROM documents
         ORDER BY updated_at DESC, id DESC
@@ -43,43 +45,44 @@ async function createDocument(title) {
     const safeTitle = title && title.trim() ? title.trim() : 'Untitled Document'
     const emptyDocument = JSON.stringify({ ops: [{ insert: '\n' }] })
 
-    const [result] = await pool.query(`
+    const { rows } = await pool.query(`
         INSERT INTO documents (title, content)
-        VALUES (?, ?)
+        VALUES ($1, $2)
+        RETURNING id
     `, [safeTitle, emptyDocument])
 
-    return getDocument(result.insertId)
+    return getDocument(rows[0].id)
 }
 
 // used for post request to update changes to the document
 async function updateDocument(documentId, userId, content, baseVersion, title = null) {
-    const connection = await pool.getConnection()
+    const client = await pool.connect()
 
     try {
-        await connection.beginTransaction()
+        await client.query('BEGIN')
 
-        const [documents] = await connection.query(`
+        const { rows: documents } = await client.query(`
             SELECT id, version
             FROM documents
-            WHERE id = ?
+            WHERE id = $1
             FOR UPDATE
         `, [documentId])
 
         const document = documents[0]
 
         if (!document) {
-            await connection.rollback()
+            await client.query('ROLLBACK')
             return { status: 'not_found' }
         }
 
         if (document.version !== baseVersion) {
-            const [latestDocuments] = await connection.query(`
+            const { rows: latestDocuments } = await client.query(`
                 SELECT id, title, content, version, updated_at
                 FROM documents
-                WHERE id = ?
+                WHERE id = $1
             `, [documentId])
 
-            await connection.rollback()
+            await client.query('ROLLBACK')
             return {
                 status: 'conflict',
                 document: latestDocuments[0]
@@ -89,25 +92,25 @@ async function updateDocument(documentId, userId, content, baseVersion, title = 
         const newVersion = document.version + 1
 
         if (title !== null && typeof title === 'string') {
-            await connection.query(`
+            await client.query(`
                 UPDATE documents
-                SET content = ?, version = ?, title = ?
-                WHERE id = ?
+                SET content = $1, version = $2, title = $3
+                WHERE id = $4
             `, [content, newVersion, title, documentId])
         } else {
-            await connection.query(`
+            await client.query(`
                 UPDATE documents
-                SET content = ?, version = ?
-                WHERE id = ?
+                SET content = $1, version = $2
+                WHERE id = $3
             `, [content, newVersion, documentId])
         }
 
-        await connection.query(`
+        await client.query(`
             INSERT INTO document_changes (document_id, user_id, base_version, new_version, content)
-            VALUES (?, ?, ?, ?, ?)
+            VALUES ($1, $2, $3, $4, $5)
         `, [documentId, userId, baseVersion, newVersion, content])
 
-        await connection.commit()
+        await client.query('COMMIT')
 
         return {
             status: 'updated',
@@ -118,19 +121,19 @@ async function updateDocument(documentId, userId, content, baseVersion, title = 
             }
         }
     } catch (error) {
-        await connection.rollback()
+        await client.query('ROLLBACK')
         throw error
     } finally {
-        connection.release()
+        client.release()
     }
 }
 
 // add new user to db, or reuse the existing row for the same name
 async function createUser(name) {
-    const [existingUsers] = await pool.query(`
+    const { rows: existingUsers } = await pool.query(`
         SELECT id, name
         FROM users
-        WHERE name = ?
+        WHERE name = $1
         LIMIT 1
     `, [name])
 
@@ -138,13 +141,14 @@ async function createUser(name) {
         return existingUsers[0]
     }
 
-    const [result] = await pool.query(`
+    const { rows } = await pool.query(`
         INSERT INTO users (name)
-        VALUES (?)
+        VALUES ($1)
+        RETURNING id
     `, [name])
 
     return {
-        id: result.insertId,
+        id: rows[0].id,
         name
     }
 }
@@ -154,27 +158,29 @@ async function updateUserLastSeen(userId) {
     await pool.query(`
         UPDATE users
         SET last_seen_at = CURRENT_TIMESTAMP
-        WHERE id = ?
+        WHERE id = $1
     `, [userId])
 }
 
 // updates the users cursor postion if it moves
+// NOTE: this assumes a UNIQUE constraint on (user_id, document_id) in the cursors table,
+// same as the old ON DUPLICATE KEY UPDATE relied on a unique key in MySQL.
 async function updateCursorChange(userId, documentId, cursorStart, cursorEnd) {
     await pool.query(`
         INSERT INTO cursors (user_id, document_id, cursor_start, cursor_end)
-        VALUES (?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE
-            cursor_start = VALUES(cursor_start),
-            cursor_end = VALUES(cursor_end),
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (user_id, document_id) DO UPDATE
+        SET cursor_start = EXCLUDED.cursor_start,
+            cursor_end = EXCLUDED.cursor_end,
             updated_at = CURRENT_TIMESTAMP
     `, [userId, documentId, cursorStart, cursorEnd])
 
     await updateUserLastSeen(userId)
 }
 
-// gets all current users on the doc 
+// gets all current users on the doc
 async function getActiveCursors(documentId = DEFAULT_DOCUMENT_ID) {
-    const [rows] = await pool.query(`
+    const { rows } = await pool.query(`
         SELECT
             users.id AS user_id,
             users.name,
@@ -183,8 +189,8 @@ async function getActiveCursors(documentId = DEFAULT_DOCUMENT_ID) {
             cursors.updated_at
         FROM cursors
         JOIN users ON users.id = cursors.user_id
-        WHERE cursors.document_id = ?
-          AND cursors.updated_at > DATE_SUB(NOW(), INTERVAL 30 SECOND)
+        WHERE cursors.document_id = $1
+          AND cursors.updated_at > NOW() - INTERVAL '30 seconds'
         ORDER BY users.name
     `, [documentId])
 
@@ -206,12 +212,12 @@ async function getSyncState(documentId = DEFAULT_DOCUMENT_ID) {
 
 // deletes a document and cascades (cursors/document_changes are FK ON DELETE CASCADE)
 async function deleteDocument(documentId) {
-    const [result] = await pool.query(`
+    const { rowCount } = await pool.query(`
         DELETE FROM documents
-        WHERE id = ?
+        WHERE id = $1
     `, [documentId])
 
-    return result.affectedRows > 0
+    return rowCount > 0
 }
 
 export {

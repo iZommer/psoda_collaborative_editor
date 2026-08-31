@@ -27,6 +27,10 @@ app.delete('/app/document', handleDeleteDocument)
 app.post('/app/cursor', handleUpdateCursor)
 app.get('/app/sync', handleSync)
 
-app.listen(port, () => {
-    console.log(`Listening on http://localhost:${port}`)
-})
+if (!process.env.VERCEL) {
+    app.listen(port, () => {
+        console.log(`Listening on http://localhost:${port}`)
+    })
+}
+
+export default app
