@@ -16,6 +16,10 @@ const app = express()
 app.use(express.json())
 app.use(express.static(path.join(process.cwd(), 'public')))
 
+app.get('/', (req, res) => {
+    res.sendFile(path.join(process.cwd(), 'public', 'index.html'))
+})
+
 app.get(['/api', '/api/'], (req, res) => {
     res.sendFile(path.join(process.cwd(), 'public', 'index.html'))
 })
