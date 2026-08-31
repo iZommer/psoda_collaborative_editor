@@ -21,14 +21,27 @@ if (!process.env.DATABASE_URL) {
 
 const { Pool } = pg
 
+const DB_SCHEMA = process.env.DB_SCHEMA || 'psoda'
+
+if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(DB_SCHEMA)) {
+    throw new Error('DB_SCHEMA must be a valid PostgreSQL identifier')
+}
+
+const tables = {
+    cursors: `${DB_SCHEMA}.cursors`,
+    documentChanges: `${DB_SCHEMA}.document_changes`,
+    documents: `${DB_SCHEMA}.documents`,
+    users: `${DB_SCHEMA}.users`
+}
+
 // Connect to db
 // DATABASE_URL should be your Neon connection string, e.g.
 // postgresql://user:password@ep-xxxx-pooler.region.aws.neon.tech/psoda?sslmode=require
-// The Neon import in psoda_final.sql creates tables in the "psoda" schema, while
-// the app uses unqualified table names such as "users" and "documents".
+// The Neon import in psoda_final.sql creates tables in the "psoda" schema.
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    options: '-c search_path=psoda,public',
+    options: `-c search_path=${DB_SCHEMA},public`,
+    enableChannelBinding: true,
     ssl: { rejectUnauthorized: false }
 })
 
@@ -39,7 +52,7 @@ const DEFAULT_DOCUMENT_ID = 1
 async function getDocument(documentId = DEFAULT_DOCUMENT_ID) {
     const { rows } = await pool.query(`
         SELECT id, title, content, version, updated_at
-        FROM documents
+        FROM ${tables.documents}
         WHERE id = $1`, [documentId])
 
     return rows[0]
@@ -49,7 +62,7 @@ async function getDocument(documentId = DEFAULT_DOCUMENT_ID) {
 async function getDocuments() {
     const { rows } = await pool.query(`
         SELECT id, title, version, created_at, updated_at
-        FROM documents
+        FROM ${tables.documents}
         ORDER BY updated_at DESC, id DESC
     `)
 
@@ -62,7 +75,7 @@ async function createDocument(title) {
     const emptyDocument = JSON.stringify({ ops: [{ insert: '\n' }] })
 
     const { rows } = await pool.query(`
-        INSERT INTO documents (title, content)
+        INSERT INTO ${tables.documents} (title, content)
         VALUES ($1, $2)
         RETURNING id
     `, [safeTitle, emptyDocument])
@@ -79,7 +92,7 @@ async function updateDocument(documentId, userId, content, baseVersion, title = 
 
         const { rows: documents } = await client.query(`
             SELECT id, version
-            FROM documents
+            FROM ${tables.documents}
             WHERE id = $1
             FOR UPDATE
         `, [documentId])
@@ -94,7 +107,7 @@ async function updateDocument(documentId, userId, content, baseVersion, title = 
         if (document.version !== baseVersion) {
             const { rows: latestDocuments } = await client.query(`
                 SELECT id, title, content, version, updated_at
-                FROM documents
+                FROM ${tables.documents}
                 WHERE id = $1
             `, [documentId])
 
@@ -109,20 +122,20 @@ async function updateDocument(documentId, userId, content, baseVersion, title = 
 
         if (title !== null && typeof title === 'string') {
             await client.query(`
-                UPDATE documents
+                UPDATE ${tables.documents}
                 SET content = $1, version = $2, title = $3
                 WHERE id = $4
             `, [content, newVersion, title, documentId])
         } else {
             await client.query(`
-                UPDATE documents
+                UPDATE ${tables.documents}
                 SET content = $1, version = $2
                 WHERE id = $3
             `, [content, newVersion, documentId])
         }
 
         await client.query(`
-            INSERT INTO document_changes (document_id, user_id, base_version, new_version, content)
+            INSERT INTO ${tables.documentChanges} (document_id, user_id, base_version, new_version, content)
             VALUES ($1, $2, $3, $4, $5)
         `, [documentId, userId, baseVersion, newVersion, content])
 
@@ -148,7 +161,7 @@ async function updateDocument(documentId, userId, content, baseVersion, title = 
 async function createUser(name) {
     const { rows: existingUsers } = await pool.query(`
         SELECT id, name
-        FROM users
+        FROM ${tables.users}
         WHERE name = $1
         LIMIT 1
     `, [name])
@@ -158,7 +171,7 @@ async function createUser(name) {
     }
 
     const { rows } = await pool.query(`
-        INSERT INTO users (name)
+        INSERT INTO ${tables.users} (name)
         VALUES ($1)
         RETURNING id
     `, [name])
@@ -172,7 +185,7 @@ async function createUser(name) {
 //stores where a users cursor was last
 async function updateUserLastSeen(userId) {
     await pool.query(`
-        UPDATE users
+        UPDATE ${tables.users}
         SET last_seen_at = CURRENT_TIMESTAMP
         WHERE id = $1
     `, [userId])
@@ -183,7 +196,7 @@ async function updateUserLastSeen(userId) {
 // same as the old ON DUPLICATE KEY UPDATE relied on a unique key in MySQL.
 async function updateCursorChange(userId, documentId, cursorStart, cursorEnd) {
     await pool.query(`
-        INSERT INTO cursors (user_id, document_id, cursor_start, cursor_end)
+        INSERT INTO ${tables.cursors} (user_id, document_id, cursor_start, cursor_end)
         VALUES ($1, $2, $3, $4)
         ON CONFLICT (user_id, document_id) DO UPDATE
         SET cursor_start = EXCLUDED.cursor_start,
@@ -198,16 +211,16 @@ async function updateCursorChange(userId, documentId, cursorStart, cursorEnd) {
 async function getActiveCursors(documentId = DEFAULT_DOCUMENT_ID) {
     const { rows } = await pool.query(`
         SELECT
-            users.id AS user_id,
-            users.name,
-            cursors.cursor_start,
-            cursors.cursor_end,
-            cursors.updated_at
-        FROM cursors
-        JOIN users ON users.id = cursors.user_id
-        WHERE cursors.document_id = $1
-          AND cursors.updated_at > NOW() - INTERVAL '30 seconds'
-        ORDER BY users.name
+            users_table.id AS user_id,
+            users_table.name,
+            cursors_table.cursor_start,
+            cursors_table.cursor_end,
+            cursors_table.updated_at
+        FROM ${tables.cursors} AS cursors_table
+        JOIN ${tables.users} AS users_table ON users_table.id = cursors_table.user_id
+        WHERE cursors_table.document_id = $1
+          AND cursors_table.updated_at > NOW() - INTERVAL '30 seconds'
+        ORDER BY users_table.name
     `, [documentId])
 
     return rows
@@ -229,7 +242,7 @@ async function getSyncState(documentId = DEFAULT_DOCUMENT_ID) {
 // deletes a document and cascades (cursors/document_changes are FK ON DELETE CASCADE)
 async function deleteDocument(documentId) {
     const { rowCount } = await pool.query(`
-        DELETE FROM documents
+        DELETE FROM ${tables.documents}
         WHERE id = $1
     `, [documentId])
 

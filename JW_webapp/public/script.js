@@ -613,7 +613,16 @@ document.addEventListener("DOMContentLoaded", async function () {
                 body: JSON.stringify({ name: name })
             })
 
-            if (!response.ok) throw new Error(`HTTP ${response.status}`)
+            if (!response.ok) {
+                let details = {}
+                try {
+                    details = await response.json()
+                } catch (err) {
+                    details = { error: await response.text().catch(() => '') }
+                }
+
+                throw new Error(`HTTP ${response.status}: ${details.error || 'Request failed'} (${details.code || 'NO_CODE'})`)
+            }
 
             const user = await response.json()
             currentUserId = Number(user.id)

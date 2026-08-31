@@ -10,6 +10,14 @@ import {
     deleteDocument
 } from '../db.js'
 
+function serverError(res, message, error) {
+    console.error(error)
+    res.status(500).json({
+        error: message,
+        code: error.code || error.name || 'UNKNOWN'
+    })
+}
+
 // Resolves which document a request is targeting.
 // Looks for documentId on the query string (GET/DELETE) or the request body (POST/PUT).
 // Falls back to DEFAULT_DOCUMENT_ID if it's missing or not a valid positive integer,
@@ -39,8 +47,7 @@ async function handleCreateUser(req, res) {
         const user = await createUser(name)
         res.status(201).json(user)
     } catch (error) {
-        console.error(error)
-        res.status(500).json({ error: 'Failed to create user' })
+        serverError(res, 'Failed to create user', error)
     }
 }
 
@@ -51,8 +58,7 @@ async function handleGetDocuments(req, res) {
         const documents = await getDocuments()
         res.json(documents)
     } catch (error) {
-        console.error(error)
-        res.status(500).json({ error: 'Failed to get documents' })
+        serverError(res, 'Failed to get documents', error)
     }
 }
 
@@ -65,8 +71,7 @@ async function handleCreateDocument(req, res) {
 
         res.status(201).json(document)
     } catch (error) {
-        console.error(error)
-        res.status(500).json({ error: 'Failed to create document' })
+        serverError(res, 'Failed to create document', error)
     }
 }
 
@@ -83,8 +88,7 @@ async function handleGetDocument(req, res) {
 
         res.json(document)
     } catch (error) {
-        console.error(error)
-        res.status(500).json({ error: 'Failed to get document' })
+        serverError(res, 'Failed to get document', error)
     }
 }
 
@@ -133,8 +137,7 @@ async function handleUpdateDocument(req, res) {
         const updated = await getDocument(documentId)
         res.json(updated)
     } catch (error) {
-        console.error(error)
-        res.status(500).json({ error: 'Failed to update document' })
+        serverError(res, 'Failed to update document', error)
     }
 }
 
@@ -161,8 +164,7 @@ async function handleUpdateCursor(req, res) {
 
         res.status(204).send()
     } catch (error) {
-        console.error(error)
-        res.status(500).json({ error: 'Failed to update cursor' })
+        serverError(res, 'Failed to update cursor', error)
     }
 }
 
@@ -181,8 +183,7 @@ async function handleSync(req, res) {
 
         res.json(syncState)
     } catch (error) {
-        console.error(error)
-        res.status(500).json({ error: 'Failed to sync document' })
+        serverError(res, 'Failed to sync document', error)
     }
 }
 
@@ -200,8 +201,7 @@ async function handleDeleteDocument(req, res) {
 
         res.status(204).send()
     } catch (error) {
-        console.error(error)
-        res.status(500).json({ error: 'Failed to delete document' })
+        serverError(res, 'Failed to delete document', error)
     }
 }
 
